@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#030603">
+<title>Someone Hub</title>
+<style>
+/* Layout: one CRT terminal window centered on a dark green void. Title bar, scrolling log, live prompt line, status bar. Single committed phosphor look. */
+:root{
+  --g:#39ff7a; --gd:#1f9a55; --amb:#ffd23f; --red:#ff4d5e; --cy:#3ee8ff; --bg:#030603; --line:#145c33;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono','Roboto Mono',monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{margin:0;min-height:100%;color:var(--g);font-family:var(--mono);font-size:clamp(13px,1.9vw,16px);line-height:1.55;
+  background:radial-gradient(70% 60% at 50% 35%,#072410 0,#020402 100%);
+  padding-block:18px;padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px));overflow-x:hidden}
+.win{position:relative;max-width:940px;margin:0 auto;min-height:calc(100vh - 40px);display:flex;flex-direction:column;overflow:hidden;
+  border:1px solid var(--line);border-radius:12px;background:rgba(2,9,4,.9);box-shadow:0 0 80px rgba(57,255,122,.12),inset 0 0 90px rgba(0,0,0,.6);
+  text-shadow:0 0 6px rgba(57,255,122,.5)}
+.win::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:5;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.28) 0 1px,transparent 1px 3px)}
+.win::before{content:"";position:absolute;left:0;right:0;top:-30%;height:30%;pointer-events:none;z-index:4;
+  background:linear-gradient(180deg,transparent,rgba(57,255,122,.06),transparent);animation:roll 8s linear infinite}
+@keyframes roll{to{top:110%}}
+
+.tb{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--gd);font-size:12px;position:relative;z-index:6}
+.dots{display:flex;gap:7px}
+.dots i{width:11px;height:11px;border-radius:50%;border:1px solid var(--g);display:block}
+.dots i:first-child{cursor:pointer;border-color:var(--red);box-shadow:0 0 6px var(--red)}
+.ttl{flex:1;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.snd{font:inherit;color:var(--gd);background:none;border:1px solid var(--line);border-radius:6px;padding:2px 8px;cursor:pointer;text-shadow:none}
+.snd:hover,.snd:focus-visible{color:var(--g);border-color:var(--g);outline:none}
+
+.term{flex:1;padding:18px 18px 8px;position:relative;z-index:3;cursor:text}
+.ln{white-space:pre-wrap;word-break:break-word;min-height:1.55em;transition:opacity .5s,transform .5s}
+.ln.gone{opacity:0;transform:translateX(30px)}
+.dim{color:var(--gd)}.warn{color:var(--amb)}.bad{color:var(--red)}.cy{color:var(--cy)}.amb{color:var(--amb)}
+.ln a{color:var(--cy);text-decoration:underline}
+.echo{color:var(--g)}
+.ps1{color:var(--cy)}
+.banner{position:relative;font-weight:700;font-size:clamp(2.6rem,13vw,6.6rem);line-height:1.05;letter-spacing:-.04em;margin:10px 0 6px;color:var(--g);text-shadow:0 0 18px rgba(57,255,122,.6)}
+.banner .us{animation:bl 1s steps(2) infinite}
+.banner::before,.banner::after{content:attr(data-text);position:absolute;left:0;top:0;opacity:0;pointer-events:none;letter-spacing:-.04em}
+.banner::before{color:#ff2d55;animation:gl 5s infinite}
+.banner::after{color:#2de2ff;animation:gl 5s infinite .07s reverse}
+@keyframes gl{0%,91%,100%{opacity:0;transform:none}92%{opacity:.85;transform:translate(-4px,1px);clip-path:inset(20% 0 55% 0)}94%{opacity:.85;transform:translate(4px,-1px);clip-path:inset(60% 0 8% 0)}96%{opacity:.85;transform:translate(-2px,0);clip-path:inset(38% 0 30% 0)}}
+.lk{display:grid;grid-template-columns:4ch 11ch minmax(0,1fr);gap:0 1ch;cursor:pointer;padding:1px 4px;margin-inline:-4px;border-radius:4px}
+.lk:hover{background:rgba(57,255,122,.1)}
+.lk .num{color:var(--amb);font-weight:700}
+.lk .hd{color:var(--cy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prompt{display:flex;align-items:center;gap:1ch;margin-top:2px}
+.prompt[hidden]{display:none}
+.ps1{flex:none;white-space:nowrap}
+#in{flex:1;min-width:6ch;background:transparent;border:0;outline:0;color:var(--g);font:inherit;text-shadow:inherit;caret-color:var(--g);caret-shape:block;padding:0}
+.sb{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:8px 14px;border-top:1px solid var(--line);color:var(--gd);font-size:12px;position:relative;z-index:6}
+.pv{font:inherit;color:var(--gd);background:none;border:0;border-bottom:1px dotted var(--gd);padding:0;cursor:pointer;text-shadow:inherit}
+.pv:hover,.pv:focus-visible{color:var(--g);border-color:var(--g);outline:none}
+.nf{display:flex;flex-wrap:wrap;gap:6px 3ch;margin:6px 0 4px}
+.nf pre{margin:0;font:inherit;line-height:1.25;color:var(--g)}
+.nf .inf{display:flex;flex-direction:column}
+.nf .inf b{display:inline-block;min-width:8ch;color:var(--amb);font-weight:400}
+
+#mx{position:fixed;inset:0;width:100%;height:100%;z-index:25;pointer-events:none;opacity:0;transition:opacity .6s}
+#mx.show{opacity:1}
+.feed{position:fixed;inset:0;z-index:30;background:rgba(2,6,3,.82);padding:18px;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;font-size:clamp(11px,1.8vw,14px);text-shadow:none}
+.feed[hidden]{display:none}
+.feed .fl{white-space:nowrap;overflow:hidden;text-overflow:clip}
+.feed .big{position:absolute;inset:0;display:grid;place-items:center;text-align:center;font-weight:700;font-size:clamp(2rem,10vw,6rem);color:var(--g);text-shadow:0 0 30px var(--g);background:rgba(2,6,3,.9);animation:flash .2s steps(2) infinite}
+.hbar{position:absolute;left:18px;right:18px;top:18px;color:var(--red)}
+.hbar b{display:block;height:10px;border:1px solid var(--red);margin-top:6px}
+.hbar b i{display:block;height:100%;width:0;background:var(--red)}
+body.hacking .win{animation:shake .12s steps(2) infinite}
+body.hacking .ln,body.hacking .tb,body.hacking .sb,body.hacking .prompt{text-shadow:2px 0 #ff2d55,-2px 0 #2de2ff;transition:transform .08s}
+body.hacking .banner{color:var(--red)}
+@keyframes shake{0%{translate:0 0}50%{translate:-5px 3px}100%{translate:4px -2px}}
+@keyframes flash{50%{color:var(--red);text-shadow:0 0 30px var(--red)}}
+@keyframes bl{50%{opacity:0}}
+.g{color:var(--g);font-weight:700}
+.gate{position:absolute;inset:0;z-index:8;background:#010301;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;cursor:pointer;transition:opacity .3s;text-shadow:none}
+.gate.out{opacity:0;pointer-events:none}
+.gate .pw{position:relative;width:76px;height:76px;border-radius:50%;border:2px solid var(--g);box-shadow:0 0 24px rgba(57,255,122,.5),inset 0 0 18px rgba(57,255,122,.25);animation:pwr 2s ease-in-out infinite}
+.gate .pw::before{content:"";position:absolute;left:50%;top:13px;width:3px;height:26px;margin-left:-1.5px;background:var(--g);box-shadow:0 0 8px var(--g);border-radius:2px}
+.gate .gt{color:var(--g);letter-spacing:.14em;text-transform:uppercase;font-size:13px;text-align:center;padding:0 16px;animation:bl 1.2s steps(2) infinite}
+.gate .gs{color:var(--gd);font-size:11px}
+@keyframes pwr{50%{box-shadow:0 0 40px rgba(57,255,122,.8),inset 0 0 24px rgba(57,255,122,.4)}}
+.win.crton{animation:crton .45s cubic-bezier(.2,.7,.2,1)}
+@keyframes crton{0%{transform:scale(0,.004);filter:brightness(10)}30%{transform:scale(1,.004);filter:brightness(6)}65%{transform:scale(1,1.03);filter:brightness(2.4)}100%{transform:none;filter:none}}
+.win.pulse{animation:pls .3s ease-out}
+@keyframes pls{0%{filter:brightness(2.4) contrast(1.3)}100%{filter:none}}
+.off{position:fixed;inset:0;background:#000;z-index:80}
+.off[hidden]{display:none}
+.win.crtoff{animation:crt .7s cubic-bezier(.7,0,.3,1) forwards}
+@keyframes crt{0%{transform:scale(1,1);filter:brightness(1)}55%{transform:scale(1,.012);filter:brightness(3)}100%{transform:scale(0,.012);filter:brightness(6);opacity:0}}
+@media (max-width:520px){.host{display:none}.lk{grid-template-columns:4ch 10ch minmax(0,1fr)}.ttl{display:none}.tb{justify-content:space-between}}
+@media (prefers-reduced-motion:reduce){.win::before,.banner::before,.banner::after,.banner .us{animation:none!important}body.hacking .win{animation:none!important}.feed .big{animation:none!important}}
+</style>
+
+</head>
+<body>
+<canvas id="mx"></canvas>
+<div class="off" id="off" hidden></div>
+<div class="feed" id="feed" hidden></div>
+
+<div class="win" id="win">
+  <div class="tb">
+    <span class="dots"><i id="dClose" title="close"></i><i></i><i></i></span>
+    <span class="ttl">someone@hub:~ &mdash; zsh</span>
+    <button class="snd" id="snd" type="button">sound: tap to enable</button>
+  </div>
+  <div class="term" id="term">
+    <div id="log"></div>
+    <noscript>
+      <div class="ln warn">JavaScript is off in this viewer, so the terminal can't start.</div>
+      <div class="ln dim">Open this file in Chrome or your browser to get the full thing. Links work anyway:</div>
+      <div class="ln">&nbsp;</div>
+      <div class="ln"><a href="https://www.tiktok.com/@diogo.611">[1] tiktok &nbsp; @diogo.611</a></div>
+      <div class="ln"><a href="https://www.twitch.tv/diesereinetyp187">[2] twitch &nbsp; diesereinetyp187</a></div>
+      <div class="ln">[3] discord &nbsp; a.guy.named.diogo</div>
+      <div class="ln"><a href="https://x.com/vortex_x09">[4] x &nbsp; @vortex_x09</a></div>
+      <div class="ln"><a href="https://www.instagram.com/d_mor06">[5] instagram &nbsp; @d_mor06</a></div>
+      <div class="ln"><a href="https://github.com/Diogo175">[6] github &nbsp; Diogo175</a></div>
+      <div class="ln">&nbsp;</div>
+      <div class="ln dim">privacy: no cookies, no tracking. contact: di.alexandre611@gmail.com</div>
+    </noscript>
+    <label class="prompt" id="prompt" hidden><span class="ps1"><span class="host">someone@hub:</span>~$</span><input id="in" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="Type a number and press enter"></label>
+  </div>
+  <div class="sb"><span id="sb">secrets 0/5</span><button class="pv" id="pv" type="button">privacy</button><span id="hint">type a number, hit enter</span></div>
+</div>
+
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id)};
+  var esc=function(s){return s.replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
+  var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var fine=window.matchMedia&&window.matchMedia('(pointer:fine)').matches;
+  var rnd=function(a,b){return a+Math.random()*(b-a)};
+
+  var LINKS=[
+    {n:'tiktok',h:'@diogo.611',u:'https://www.tiktok.com/@diogo.611',al:['tt']},
+    {n:'twitch',h:'diesereinetyp187',u:'https://www.twitch.tv/diesereinetyp187',al:['tv']},
+    {n:'discord',h:'a.guy.named.diogo',copy:'a.guy.named.diogo',al:['dc']},
+    {n:'x',h:'@vortex_x09',u:'https://x.com/vortex_x09',al:['twitter']},
+    {n:'instagram',h:'@d_mor06',u:'https://www.instagram.com/d_mor06',al:['ig','insta']},
+    {n:'github',h:'Diogo175',u:'https://github.com/Diogo175',al:['gh','git']}
+  ];
+
+  /* ================= audio ================= */
+  var AC=null,master=null,noiseBuf=null,soundOn=true;
+  function unlock(){
+    if(AC){if(AC.state==='suspended')AC.resume();return}
+    try{
+      AC=new (window.AudioContext||window.webkitAudioContext)();
+      master=AC.createGain();master.gain.value=.22;master.connect(AC.destination);
+      noiseBuf=AC.createBuffer(1,AC.sampleRate,AC.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+      AC.onstatechange=updUI;updUI();
+      if(AC.state==='suspended'){try{var rp=AC.resume();if(rp&&rp.catch)rp.catch(function(){})}catch(e2){}}
+    }catch(e){AC=null}
+  }
+  function tone(f,dur,type,vol,when,slideTo){
+    if(!AC||!soundOn||AC.state!=='running')return;
+    var t=AC.currentTime+(when||0),o=AC.createOscillator(),g=AC.createGain();
+    o.type=type||'square';o.frequency.setValueAtTime(f,t);
+    if(slideTo)o.frequency.exponentialRampToValueAtTime(slideTo,t+dur);
+    g.gain.setValueAtTime(vol||.2,t);g.gain.exponentialRampToValueAtTime(.001,t+dur);
+    o.connect(g);g.connect(master);o.start(t);o.stop(t+dur+.03);
+  }
+  function noise(dur,vol,freq,when,q){
+    if(!AC||!soundOn||AC.state!=='running')return;
+    var t=AC.currentTime+(when||0),s=AC.createBufferSource();s.buffer=noiseBuf;
+    var f=AC.createBiquadFilter();f.type='bandpass';f.frequency.value=freq||2000;f.Q.value=q||1;
+    var g=AC.createGain();g.gain.setValueAtTime(vol||.3,t);g.gain.exponentialRampToValueAtTime(.001,t+dur);
+    s.connect(f);f.connect(g);g.connect(master);s.start(t,Math.random()*.5,dur+.02);
+  }
+  var SFX={
+    key:function(){noise(.025,.25,rnd(1500,3000),0,3);tone(rnd(900,1200),.02,'square',.04)},
+    del:function(){tone(rnd(200,400),.05,'square',.1)},
+    enter:function(){noise(.05,.35,700,0,2);tone(160,.08,'square',.12)},
+    ok:function(){[660,880,1320].forEach(function(f,i){tone(f,.12,'square',.14,i*.07)})},
+    err:function(){tone(140,.28,'sawtooth',.22,0,70);tone(110,.28,'square',.12,.02)},
+    launch:function(){tone(300,.4,'sawtooth',.14,0,1800);noise(.25,.2,3000,.1)},
+    blip:function(){tone(rnd(700,2100),rnd(.04,.09),Math.random()<.5?'square':'sawtooth',.1)},
+    glitch:function(){noise(rnd(.06,.16),.35,rnd(300,4300),0,.7)},
+    modem:function(){for(var i=0;i<12;i++)tone(rnd(400,2600),.06,'sine',.12,i*.06)},
+    granted:function(){[523,659,784,1047].forEach(function(f,i){tone(f,.18,'square',.16,i*.09)});tone(1047,.5,'triangle',.18,.4)},
+    off:function(){tone(1200,.5,'sawtooth',.14,0,40);noise(.3,.2,6000)},
+    on:function(){tone(80,.3,'sawtooth',.1,0,600);noise(.15,.15,5000)},
+    boot:function(){tone(880,.08,'square',.1);tone(1320,.1,'square',.1,.12)},
+    thump:function(){tone(60,.5,'sine',.5,0,32);noise(.14,.3,220)},
+    scr:function(){tone(rnd(300,1800),.03,'square',.05)}
+  };
+
+  /* ================= state + ui ================= */
+  var found={};
+    var log=$('log'),inp=$('in'),prompt=$('prompt'),busy=false,booting=false;
+  function nEggs(){return Object.keys(found).length}
+  function updUI(){
+    $('sb').textContent='secrets '+nEggs()+'/5';
+    $('snd').textContent=(!AC||AC.state!=='running')?'sound: tap to enable':(soundOn?'sound: on':'sound: off');
+  }
+  function print(html,cls){var d=document.createElement('div');d.className='ln'+(cls?' '+cls:'');d.innerHTML=html;log.appendChild(d);window.scrollTo(0,document.body.scrollHeight);return d}
+  function egg(id){
+    if(found[id])return;found[id]=1;
+        updUI();
+    setTimeout(function(){print('[secret unlocked '+nEggs()+'/5]','amb');SFX.ok();if(nEggs()===5)setTimeout(function(){print('all secrets found. you are him.','amb');SFX.granted()},700)},350);
+  }
+  $('snd').addEventListener('click',function(){if(!AC||AC.state!=='running'){unlock();soundOn=true}else soundOn=!soundOn;updUI();if(soundOn)SFX.ok()});
+  ['keydown','pointerdown'].forEach(function(ev){document.addEventListener(ev,function(e){if(e.target&&e.target.closest&&e.target.closest('#snd'))return;unlock()},true)});
+
+  /* ================= links ================= */
+  var PS='<span class="ps1">someone@hub:~$</span> ';
+  function printList(){
+    LINKS.forEach(function(l,i){
+      var d=print('<span class="num">['+(i+1)+']</span><span>'+l.n+'</span><span class="hd">'+esc(l.h)+(l.copy?'  (copy)':'')+'</span>','lk');
+      d.setAttribute('data-i',i);
+    });
+  }
+  log.addEventListener('click',function(e){var t=e.target.closest&&e.target.closest('.lk');if(t&&!busy)openLink(+t.getAttribute('data-i'))});
+  function openLink(i){openObj(LINKS[i])}
+  function openObj(l){
+    if(l.copy){
+      var ok=function(){print('copied <b>'+esc(l.copy)+'</b> to clipboard. add me on discord.','dim');SFX.ok()};
+      var fb=function(){print('discord: <b>'+esc(l.copy)+'</b>','dim');SFX.ok()};
+      try{navigator.clipboard.writeText(l.copy).then(ok,fb)}catch(e){fb()}
+      return;
+    }
+    SFX.launch();print('connecting to <b>'+l.n+'</b> ...','dim');
+    setTimeout(function(){
+      var a=document.createElement('a');a.href=l.u;a.target='_blank';a.rel='noopener noreferrer';document.body.appendChild(a);a.click();a.remove();
+      print('connection open. nothing happened? <a href="'+l.u+'" target="_blank" rel="noopener noreferrer">click here</a>','dim');
+    },450);
+  }
+  function findLink(c){
+    if(/^[1-6]$/.test(c))return +c-1;
+    for(var i=0;i<LINKS.length;i++){var l=LINKS[i];if(l.n===c||l.h.toLowerCase()===c||l.al.indexOf(c)>-1)return i}
+    return -1;
+  }
+
+  /* ================= commands ================= */
+  function exec(raw){
+    var c=raw.trim();
+    print(PS+esc(c),'echo');
+    if(!c)return;
+    var lc=c.toLowerCase(),i=findLink(lc);
+    if(i>-1)return openLink(i);
+    if(/^sudo\b/.test(lc)){
+      if(/rm\s+-rf\s+(\/|\*|~)/.test(lc))return destruct();
+      SFX.err();return print('someone is not in the sudoers file. this incident will be reported.','bad');
+    }
+    switch(lc){
+      case 'hacker':case 'hack':case 'hacking':return hack();
+      case 'matrix':return matrix();
+      case 'privacy':case 'legal':case 'contact':return privacy();
+      case 'neofetch':case 'fetch':case 'sysinfo':return neofetch();
+      case 'exit':case 'quit':case 'logout':return crtOff();
+      case '187':egg('187');SFX.ok();return print('yo chat. diesereinetyp187 reporting in.','cy');
+      case 'help':case '?':case 'man':
+        SFX.blip();
+        print('commands','dim');
+        print('  1-6 or name open a link, e.g. 2 or twitch');
+        print('  list          show the links again');
+        print('  neofetch      system info');
+        print('  privacy       data and contact');
+        print('  whoami        who is this');
+        print('  eggs          how many secrets you found');
+        print('  mute/unmute   sound off / on');
+        print('  clear         clean the screen');
+        return print('5 secrets are hidden in here. good luck.','amb');
+      case 'list':case 'ls':SFX.blip();return printList();
+      case 'clear':case 'cls':log.textContent='';SFX.blip();return printList();
+      case 'whoami':SFX.blip();return print('someone aka diogo. streams, builds, breaks stuff.');
+      case 'eggs':case 'secrets':SFX.blip();return print('secrets found: '+nEggs()+'/5','amb');
+      case 'mute':soundOn=false;updUI();return print('sound off','dim');
+      case 'unmute':soundOn=true;updUI();SFX.ok();return print('sound on','dim');
+      case 'ping':SFX.blip();return print('pong. 4ms. berlin says hi.','dim');
+    }
+    SFX.err();print('command not found: '+esc(c)+'. try <b>help</b>','bad');
+  }
+  inp.addEventListener('keydown',function(e){
+    if(e.key==='Enter'){var v=inp.value;inp.value='';SFX.enter();if(!busy)exec(v)}
+    else if(e.key==='Backspace')SFX.del();
+    else if(e.key.length===1)SFX.key();
+  });
+  $('win').addEventListener('click',function(e){
+    if(prompt.hidden||(window.getSelection&&String(window.getSelection()).length))return;
+    if(e.target.closest&&(e.target.closest('#snd')||e.target.closest('a')))return;
+    inp.focus();
+  });
+
+  /* ================= egg: hacker ================= */
+  var JIT=null,FEED=null;
+  function jitter(){
+    if(reduce)return;
+    var els=document.querySelectorAll('.ln,.tb,.sb,.prompt');
+    for(var i=0;i<els.length;i++){
+      els[i].style.transform='translate('+rnd(-34,34).toFixed(0)+'px,'+rnd(-14,14).toFixed(0)+'px) rotate('+rnd(-4,4).toFixed(1)+'deg) skewX('+rnd(-9,9).toFixed(0)+'deg)';
+    }
+  }
+  function unjitter(){
+    var els=document.querySelectorAll('.ln,.tb,.sb,.prompt');
+    for(var i=0;i<els.length;i++){els[i].style.transform=''}
+  }
+  function hack(){
+    if(busy)return;busy=true;
+    var feed=$('feed'),hex=function(){return Math.floor(Math.random()*65536).toString(16).padStart(4,'0')};
+    var ip=function(){return [Math.floor(rnd(10,250)),Math.floor(rnd(0,255)),Math.floor(rnd(0,255)),Math.floor(rnd(1,255))].join('.')};
+    var T=['bypassing firewall','injecting payload','cracking hash','spoofing MAC address','escalating privileges','decrypting /etc/shadow'
